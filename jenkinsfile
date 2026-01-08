@@ -1,9 +1,11 @@
 pipeline{
-  agent{
+ /*  agent{
     node{
       label 'slave'
     }
-  }
+  } */
+
+  agent any
 
   environment{
          COURSE = "Jenkins"
