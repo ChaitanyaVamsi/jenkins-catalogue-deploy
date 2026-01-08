@@ -1,44 +1,108 @@
-pipeline{
- /*  agent{
-    node{
-      label 'slave'
-    }
-  } */
+pipeline {
 
+  /*
+   * Agent configuration
+   * -------------------
+   * `agent any` means this pipeline can run on any available Jenkins worker node.
+   * (Earlier you had a fixed slave node, which is now commented out.)
+   */
   agent any
 
-  environment{
-         COURSE = "Jenkins"
-        appVersion = ""
-        ACC_ID = "471112667143"
-        PROJECT = "roboshop"
-        COMPONENT = "catalogue"
-        REGION = "us-east-1"
+
+  /*
+   * Global environment variables
+   * ----------------------------
+   * These values are available in all stages and steps.
+   */
+  environment {
+    COURSE    = "Jenkins"            // Training / reference variable (not used in pipeline logic)
+    appVersion = ""                  // Placeholder (actual value comes from build parameter)
+    ACC_ID    = "471112667143"        // AWS Account ID
+    PROJECT   = "roboshop"            // Project name (used in EKS cluster naming)
+    COMPONENT = "catalogue"           // Application / microservice name
+    REGION    = "us-east-1"           // AWS region where EKS clusters exist
   }
 
-  options{
-    timeout(time: 30, unit: 'MINUTES')
-    disableConcurrentBuilds()
+
+  /*
+   * Pipeline execution options
+   */
+  options {
+    timeout(time: 30, unit: 'MINUTES')   // Abort build if it runs longer than 30 minutes
+    disableConcurrentBuilds()            // Prevent multiple builds of this job at the same time
   }
 
+
+  /*
+   * Build parameters
+   * ----------------
+   * These are inputs provided by the user when triggering the pipeline.
+   */
   parameters {
-        string(name: 'appVersion', description: 'Which app version you want to deploy')
-        choice(name: 'deploy_to', choices: ['dev', 'qa', 'prod'], description: 'Pick something')
-    }
 
-    stages{
-      stage('deploy'){
-        steps{
-          script{
-            withAWS(region:'us-east-1',credentials:'aws-creds') {
-                sh """
-                        aws eks update-kubeconfig --region ${REGION} --name ${PROJECT}-${params.deploy_to}
-                        kubectl get nodes
-                  """
-            }
+    // Application version to deploy (example: 1.0.3, latest, commit-id)
+    string(
+      name: 'appVersion',
+      description: 'Which app version you want to deploy'
+    )
 
+    /*
+     * deploy_to parameter:
+     * --------------------
+     * This selects the TARGET ENVIRONMENT / EKS CLUSTER.
+     *
+     * dev  -> roboshop-dev  EKS cluster
+     * qa   -> roboshop-qa   EKS cluster
+     * prod -> roboshop-prod EKS cluster
+     *
+     * NOTE:
+     * This parameter DOES NOT select a Git branch.
+     * It is only used to decide which Kubernetes cluster Jenkins connects to.
+     */
+    choice(
+      name: 'deploy_to',
+      choices: ['dev', 'qa', 'prod'],
+      description: 'Select which EKS cluster to connect to'
+    )
+  }
+
+
+  stages {
+
+    /*
+     * Deployment stage
+     * ----------------
+     * This stage connects Jenkins to the selected EKS cluster
+     * and verifies access by listing cluster nodes.
+     */
+    stage('deploy') {
+      steps {
+        script {
+
+          /*
+           * withAWS:
+           * --------
+           * Uses Jenkins AWS credentials (aws-creds)
+           * to authenticate with AWS for the duration of this block.
+           */
+          withAWS(region: 'us-east-1', credentials: 'aws-creds') {
+
+            sh """
+              # Update kubeconfig to point to the selected EKS cluster
+              # Example:
+              # deploy_to=dev  -> roboshop-dev
+              # deploy_to=qa   -> roboshop-qa
+              # deploy_to=prod -> roboshop-prod
+              aws eks update-kubeconfig \
+                --region ${REGION} \
+                --name ${PROJECT}-${params.deploy_to}
+
+              # Verify connectivity to the cluster
+              kubectl get nodes
+            """
           }
         }
       }
     }
+  }
 }
