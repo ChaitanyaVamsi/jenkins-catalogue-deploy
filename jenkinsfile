@@ -1,0 +1,40 @@
+// Load Jenkins Shared Library named 'jenkins-shared-lib'
+// This allows us to use reusable functions like EksDeploy()
+@Library('jenkins-shared-lib') _
+
+
+// Define job-level properties (mainly parameters)
+// These parameters will be visible under "Build with Parameters"
+// and can also be passed from another Jenkins pipeline
+properties([
+  parameters([
+    // Application version to deploy (example: 1.0.2, build-45, commit-sha)
+    string(name: 'appVersion', defaultValue: ''),
+
+    // Target environment for deployment
+    // Default is 'dev' if nothing is passed
+    string(name: 'deployTo', defaultValue: 'dev')
+  ])
+])
+
+
+// Create a configuration map that will be passed to the shared library
+// This keeps the deploy logic generic and reusable
+def config = [
+  // Project name (used for grouping resources, naming, etc.)
+  project: "roboshop",
+
+  // Component/service name to deploy
+  component: "catalogue",
+
+  // Version of the application passed as a Jenkins parameter
+  appVersion: params.appVersion,
+
+  // Deployment environment (dev / qa / prod)
+  deploy_to: params.deployTo
+]
+
+
+// Call the shared library function responsible for deploying
+// to Amazon EKS using the above configuration
+EksDeploy(config)
